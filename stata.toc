@@ -1,3 +1,4 @@
 v 3
+d Tore Bersvendsen, University of Agder, tore.bersvendsen@uia.no
 d Jan Ditzen, Heriot-Watt University, j.ditzen@hw.ac.uk, jan.ditzen.net
 p xthst testing for homogenous slopes.

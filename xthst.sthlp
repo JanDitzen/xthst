@@ -1,6 +1,6 @@
 {smcl}
 {hline}
-help {hi:xthst}{right: v. 1.0 - 13. November 2019}
+help {hi:xthst}{right: v. 1.1 - 17. January 2020}
 {hline}
 {title:Title}
 
@@ -37,6 +37,7 @@ Data must be {cmd:xtset} before using {cmd:xthst}; see {help xtset}.
 {p 4}{help xthst##saved_vales:Saved Values}{p_end}
 {p 4}{help xthst##examples:Examples}{p_end}
 {p 4}{help xthst##references:References}{p_end}
+{p 4}{help xthst##vhist:Version History}{p_end}
 {p 4}{help xthst##about:About}{p_end}
 
 {marker description}{title:Description}
@@ -95,7 +96,7 @@ then the hypothesis of slope homogeneity is:{p_end}
 {p 4 4} where, under the H0, the statistic is asymptotically Delta ~ N(0,1) distributed.
 {p_end} 
 
-{p 4 4} S2_tilde is defined as:{p_end}
+{p 4 4} S2_tilde is defined as in equation 13 in Peasaran and Yamagata (2008):{p_end}
 
 {p 8 12} S2_tidle = sum(i=1,N) (b2_i - b2_wfe)'((X2_i' * M1_i * X2_i)/sigma2_i)(b2_i - b2_wfe), {p_end}
 
@@ -128,11 +129,13 @@ Heteroskedasticity and serial correlation are dealt with by the following HAC es
  
 {p 8 12} V_i,T = L_i(0) + sum(j=1,bw)(kr(j/bw)[L_i(j) + L_i(j)']), {p_end}
 
-{p 4 4} where, bw is the selected  bandwith and kr the chosen kernel. 
-Available kernels are {it:Bartlett}, {it:Quadratic Spectral} (QS) and {it:Truncated}. 
-The Bartlett kernel is the default  and the bandwith is set to bw = floor[4(T/100)^(2/9)]. {break}
+{p 4 4} where, bw is the selected  bandwidth and kr the chosen kernel. 
+Available kernels are {it:Bartlett} (default), {it:Quadratic Spectral} (QS) and {it:Truncated}. 
 L_i(j) is the correlation between the residual of a fixed effects regression 
-multiplied with the demeaned explanatory regressors in t and in t-j. {p_end}
+multiplied with the demeaned explanatory regressors in t and in t-j.
+If not specified, the bandwith is automatically selected following  
+Andrews and Monahan (1992) and Newey West (1994).
+{p_end}
 
 {marker options}{title:Options}
 
@@ -148,19 +151,21 @@ adjusted.
 May not be combined with {cmd:hac}.{p_end}
 
 {p 4 4}{cmd:hac} implements the HAC consistent test by Blomquist and Westerlund (2013).
-If {cmd:kernel} and {cmd:bw} are not specified, kernel is set to {cmd:bartlett} 
-and bw = floor[4(T/100)^(2/9)]. 
+If {cmd:kernel} and {cmd:bw} are not specified, kernel is set to {cmd:bartlett}. 
 May not be combined with {cmd:ar}.{p_end}
 
 {p 4 4}{cmd:kernel(}{help kernel}{cmd:)} specifies the kernel function used in calculating the HAC consistent test statistic.
 Available kernels: {cmd:bartlett}, {cmd:qs} (quadratic spectral) and {cmd:truncated}.
 Is only required in combination with {cmd:hac}.{p_end}
 
-{p 4 4}{cmd:bw(#)} bandwith equal to # for the HAC consistent test statistic, 
+{p 4 4}{cmd:bw(#)} bandwidth equal to # for the HAC consistent test statistic, 
 where # is an integer greater than zero.
-Is only required in combination with {cmd:hac}.{p_end}
+Is only required in combination with {cmd:hac}. 
+If not set then the automatic bandwidth selection from 
+Andrews and Monahan (1992) and Newey West (1994) is used.{p_end}
 
-{p 4 4}{cmdab:white:ning} performs prewhitening to reduce small-sample bias in HAC estimation. 
+{p 4 4}{cmdab:white:ning} performs prewhitening to reduce small-sample bias in HAC estimation,
+see Andrews and Monahan (1992). 
 Is only required in combination with {cmd:hac}.{p_end}
 
 {p 4 4}{cmdab:cr:osssectional(}{help varlist:varlist_cr}{cmd: [,cr_lags(}{help numlist}{cmd:)])} 
@@ -180,7 +185,7 @@ then {cmd:cr_lags(0 2)}  {p_end}
 {cmd:xthst} stores the following in {cmd:r()}:
 
 {col 4} Scalars
-{col 8}{cmd: r(bw)}{col 27} bandwith
+{col 8}{cmd: r(bw)}{col 27} bandwidth
 
 {col 4} Macros
 {col 8}{cmd: r(crosssectional)}{col 27} variables of which cross-section averages are added
@@ -233,7 +238,7 @@ Blomquist, Westerlund (2013):{p_end}
 {p 8}{stata xthst d.log_rgdp L.d.log_rgdp log_hc log_ck log_ngd, hac}.{p_end}
 
 {p 4 4}Instead of the bartlett kernel, we can use the Quadratic-Spehere kernel with,
-say, a bandwith of 6 by using the options {cmd:kernel()} and {cmd:bw()}:{p_end}
+say, a bandwidth of 6 by using the options {cmd:kernel()} and {cmd:bw()}:{p_end}
 
 {p 8}{stata xthst d.log_rgdp L.d.log_rgdp log_hc log_ck log_ngd, hac kernel(qs)}.{p_end}
 
@@ -256,13 +261,28 @@ can be employed using the option {cmd:ar}:{p_end}
 
 {marker references}{title:References}
 
-{p 4 8} Pesaran, M. H. and T. Yamagata. 2008. Testing slope homogeneity in large panels.
-Journal of Econometrics 142, pp 50 - 93. {p_end}
+
+{p 4 8} Andrews, D. W. K. and J. C. Monahan. 1992.
+An Improved Heteroskedasticity and Autocorrelation Consistent Covariance Matrix Estimator.
+Econometrica 60(4), p. 953 - 966.{p_end}
 
 {p 4 8} Blomquist, J. and J. Westerlund. 2013. Testing slope homogeneity in large panels with serial correlation.
-Economics Letters 121, pp 374 - 378. {p_end} 
+Economics Letters 121, pp 374 - 378.{p_end}
 
-{marker about}{title:Author}
+{p 4 8} Newey, W. K. and K. D. West. 1994. Automatic Lag Selection in Covariance Matrix Estimation.
+Review of Economic Studies 61(4), pp. 631-653.{p_end}
+
+{p 4 8} Pesaran, M. H. and T. Yamagata. 2008. Testing slope homogeneity in large panels.
+Journal of Econometrics 142, pp 50 - 93.{p_end}
+
+
+{marker vhist}{title:Version History}
+{p 4 8}This version: 1.1 - 17. January 2020{p_end}
+{p 8 10} - Improved Speed.{p_end}
+{p 8 10} - Bug fix in small sample adjustment for S and S_HAC.{p_end}
+{p 8 10} - Bug fix if hac used, first auto correlation was miscalculated.{p_end}
+
+{marker about}{title:About}
 
 {p 4}Tore Bersvendsen (University of Agder){p_end}
 {p 4}Email: {browse "mailto:tore.bersvendsen@uia.no":tore.bersvendsen@uia.no}{p_end}
@@ -273,5 +293,7 @@ Economics Letters 121, pp 374 - 378. {p_end}
 
 {p 4}We are grateful to Jochen Jungeilges 
 for providing many helpful comments and discussions. 
+Johan Blomquist and Joakim Westerlund kindly provided their Gauss Code for
+cross-checking.
 All remaining errors are our own.{p_end}
 

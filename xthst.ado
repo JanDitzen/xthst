@@ -1,7 +1,16 @@
 *! xthst
-*! Version 1.0 - 13.11.2019
+*! Version 1.1 - 17.01.2020
 *! Tore Bersvendsen (University of Agder) tore.bersvendsen@uia.no
 *! Jan Ditzen (Heriot-Watt University) j.ditzen@hw.ac.uk www.jan.ditzen.net 
+
+/*
+Version History
+	- 22.12.2019 - error in deltatesthac; for calculation of xbar was removed twice.
+				 - Test for PY is two sided, for BW one sided?! 
+				 - Qi Vi Qi needs to be cacluated within the i-loops. 
+	- 17.01.2020 - bug fix in deltahac; wrong initial gamma and divided by incorrect number of periods
+				 - bug fix in deltacalc; divided by incorrect number of periods
+*/
 
 capture program drop xthst
 program define xthst, rclass sortpreserve
@@ -10,6 +19,7 @@ program define xthst, rclass sortpreserve
 	version 14
 	
 	qui{
+
 		if "`whitening'" != "" & "`hac'" == "" {
 			local hac hac
 		}
@@ -19,7 +29,7 @@ program define xthst, rclass sortpreserve
 		}
 		
 		if "`hac'" != "" & "`bw'" == "-999" {
-			local bw = 0
+			local bw = -1
 		}
 		
 		if "`hac'" == "hac" & "`ar'" == "ar" {
@@ -53,9 +63,7 @@ program define xthst, rclass sortpreserve
 				local csa `r(varlist)'	
 				local cross_structure "`r(cross_structure)'"
 				markout `touse' `csa'	
-		}
-
-		
+		}		
 		
 		*** check for partial vars
 		if "`partial'" != "" {
@@ -83,17 +91,24 @@ program define xthst, rclass sortpreserve
 		*** start mata program here
 		tempname delta delta_st delta_adj 
 		if "`hac'" == "" {
-			mata st_matrix("`delta'",deltatest("`lhs'","`rhs'","`partial' `csa'","`idvar' `tvar'","`touse'",`=("`ar'"=="ar")'))
+			 mata st_matrix("`delta'",deltatest("`lhs'","`rhs'","`partial' `csa'","`idvar' `tvar'","`touse'",`=("`ar'"=="ar")'))
 		}
 		else {
-			mata st_matrix("`delta'",deltatesthac("`lhs'","`rhs'","`partial' `csa'","`idvar' `tvar'","`touse'",`bw',`=("`whitening'"=="whitening")',"`kernel'"))
+			 mata st_matrix("`delta'",deltatesthac("`lhs'","`rhs'","`partial' `csa'","`idvar' `tvar'","`touse'",`bw',`=("`whitening'"=="whitening")',"`kernel'"))
 			local bw = `delta'[3,1]	
 		}
-
 	}
 	*** Output	
 	scalar `delta_adj' = `delta'[2,1]
 	scalar `delta_st' = `delta'[1,1]	
+	
+	*** Disagreement between PY and BW. In PY delta is two sided N(0,1) [ see p. 64, above 5.1]; in BW it is one-sided N(0,1); see footnote Tab 1; keep two sided
+	if "`hac'" == "" {
+		local twosided = 2
+	}
+	else {
+		local twosided = 2
+	}	
 	
 	if "`nooutput'" == "" {
 		noi disp as text "Test for slope homogeneity"
@@ -105,19 +120,18 @@ program define xthst, rclass sortpreserve
 			noi disp as text "(Blomquist, Westerlund. 2013. Economic Letters)"
 		}
 		
-		
-		
 		noi disp "H0: slope coefficients are homogenous"
 		di as text "{hline 37}"
 		noi disp as result _col(10) "Delta" _col(25) "p-value"
-		noi disp as result  _col(7) %9.3f `delta_st' _col(23) %9.3f 2*(1-normal(abs(`delta_st')))
-		noi disp as result  _col(2) "adj." _col(7) %9.3f `delta_adj'  _col(23) %9.3f 2*(1-normal(abs(`delta_adj')))
+		noi disp as result  _col(7) %9.3f `delta_st' _col(23) %9.3f `twosided'*(1-normal(abs(`delta_st')))
+		noi disp as result  _col(2) "adj." _col(7) %9.3f `delta_adj'  _col(23) %9.3f `twosided'*(1-normal(abs(`delta_adj')))
 		di as text "{hline 37}"
 		if "`hac'" != "" {
 			if "`kernel'" == "qs" { 
 				local kernel "quadratic spectral (QS)"
 			}
-			noi disp as txt "HAC Kernel: `kernel' with bandwith " `bw'
+			noi disp as txt "HAC Kernel: `kernel' "
+			noi disp as txt "with average bandwith " `bw'
 		}
 		if "`partial'" != "" {
 			local partial = subinstr("`partial'","`const'","constant",.)
@@ -133,6 +147,7 @@ program define xthst, rclass sortpreserve
 			display  as text "Cross Sectional Averaged Variables: `crosssectional_output'"
 		}
 	}
+	
 	*** Return
 	return clear
 	matrix `delta' = (`delta_st' \ `delta_adj')
@@ -141,12 +156,11 @@ program define xthst, rclass sortpreserve
 	return matrix delta = `delta'
 	
 	tempname delta_p
-	matrix `delta_p' = 2*(1-normal(abs(`delta_st'))) \ 2*(1-normal(abs(`delta_adj')))
+	matrix `delta_p' = `twosided'*(1-normal(abs(`delta_st'))) \ `twosided'*(1-normal(abs(`delta_adj')))
 	matrix rownames `delta_p' = Delta Delta_adjusted
 	matrix colnames `delta_p' = p-Value
 	
 	return matrix delta_p = `delta_p'
-
 	
 	if "`hac'" != "" {
 		return scalar bw = `bw'
@@ -168,7 +182,6 @@ Steps
 3. calculate sigma2i, beta2i, gives beta2wfe
 4. calcualte s_tilde
 5. calculate delta
-
 
 */
 
@@ -206,7 +219,7 @@ mata:
 		N_g = rows(Nuniq)
 		K = cols(X)		
 		Kpartial = 0
-		/// set it as panel
+		/// set it as panel, for N_g dimension
 		index = panelsetup(idt[.,1],1)
 		
 		/// 1. Partialling out
@@ -244,6 +257,8 @@ mata:
 		b_fe = tmp_xx1 * tmp_xy
 		resid = Y - X * b_fe
 		
+		
+		
 		/// 3 calcualte sigma2i, beta2i, gives beta2wfe
 		sigma2 = J(N_g,1,.)
 		beta2i = J(N_g,K,.)
@@ -259,16 +274,17 @@ mata:
 			Yi = Y[(starti..endi),.]
 			Xi = X[(starti..endi),.]
 			residi = resid[(starti..endi),.]
-			
 			Ti = rows(Xi)
+			
 			Ki = cols(Xi)
 	
-			sigma2[i] =  residi'residi :/ (Ti - Kpartial - 1)
+			sigma2[i] =  residi'residi :/ (Ti - Kpartial)
+			///corrected sigma2[i] =  residi'residi :/ (Ti - Kpartial-1)
 			
 			tmp_xx = quadcross(Xi,Xi)
 			tmp_xx1 = invsym(tmp_xx)
 			tmp_xy = quadcross(Xi,Yi)
-						
+	
 			beta2i[i,.] = (tmp_xx1*tmp_xy)'
 			beta2wfe_up = beta2wfe_up :+ tmp_xy :/ sigma2[i]
 			beta2wfe_low = beta2wfe_low :+  tmp_xx :/sigma2[i]
@@ -283,11 +299,11 @@ mata:
 		beta2wfe_low = invsym(beta2wfe_low)
 		
 		beta2wfe = beta2wfe_low * beta2wfe_up 
-		
 		/// 4. calcualte s_tilde
 		S_tilde = 0
 		i = 1
 
+		
 		while (i <= N_g) {
 			starti = index[i,1]
 			endi = index[i,2]
@@ -295,7 +311,7 @@ mata:
 			beta_i = beta2i[i,.]'
 			
 			tmp_xx = quadcross(Xi,Xi) :/ sigma2[i]
-			
+
 			S_tilde = S_tilde + (beta_i - beta2wfe)' * tmp_xx * (beta_i - beta2wfe)			
 			i++
 		}
@@ -320,7 +336,7 @@ mata:
 							string scalar rhspartialname,	/// variables to be partialled out
 							string scalar idtname, 		/// id and t variables
 							string scalar tousename, /// touse variable	
-							real scalar bandwith,	///
+							real scalar bandwith_init,	///
 							real scalar whitening, ///
 							string scalar kernel ///
 							)			
@@ -351,11 +367,13 @@ mata:
 		N_g = rows(Nuniq)
 		K = cols(X)		
 		Kpartial = 0
-		/// set it as panel
+		
+		/// set it as panel for N_g dimension
 		index = panelsetup(idt[.,1],1)
 		Xbar = J(rows(X),cols(X),.)
-
-		/// 1. Partialling out
+		Ybar = J(rows(Y),cols(Y),.)
+		
+		/// 1. Partialling out (always used because constant is always partialled out?)
 		if (Z[1,1] != .) {
 			i = 1
 			Kpartial = cols(Z)
@@ -374,31 +392,40 @@ mata:
 				Y[(starti..endi),.] = Yi - Zi * tmp_zz1*quadcross(Zi,Yi)
 				X[(starti..endi),.] = Xi - Zi * tmp_zz1*quadcross(Zi,Xi)
 
-				Xbar[(starti..endi),.] = J(rows(Xi),1,mean(Xi))	
+				Xbar[(starti..endi),.] = J(rows(Xi),1,mean(X[(starti..endi),.]))	
+				Ybar[(starti..endi),.] = J(rows(Yi),1,mean(Y[(starti..endi),.])) 
 				
 				i++
 			}
 
-		}		
-
-		//// 2. Fe estimates
+		}
+		
+		//// 2. Fe estimates (from demeand variables/constant partialled out)
 		tmp_xx = quadcross(X,X)
 		tmp_xy = quadcross(X,Y)
 		tmp_xx1 = invsym(tmp_xx)
 		b_fe = tmp_xx1 * tmp_xy
-		eps = Y - X * b_fe
 		
-		uhat = (X - Xbar) :* eps
-		//Gamma = (N_g*T,K,.)
-
+		/// eps in paper (yit - ybari) - (xit - xbari) beta, but means are patialled out?!; in gauss code eps is e_; uhat in "e_.*(X'M)'"
+		///eps = (Y - Ybar) - (X - Xbar) * b_fe 
+		eps = (Y ) - (X) * b_fe 
+		uhat = (X ) :* eps
+		
+		/// index2 is for a N*K x K matrix (stacked variances)
 		id2 = Nuniq#J(K,1,1)
 		index2 = panelsetup(id2[.,1],1)
-
-		// here V is inverse of V!!
-		V = J(N_g*K,K,.)
+					
+		///init values
+		beta_low = J(K,K,0)
+		beta_up = J(K,1,0)
+		QVQ = J(N_g*K,K,0)		
+		
+		/// sum of bandwith, used for output
+		bandwith_sum = 0
 		
 		i=1
 		while (i<=N_g) {
+			"start with i"
 			starti = index[i,1]
 			endi = index[i,2]
 			
@@ -406,99 +433,191 @@ mata:
 			end2i = index2[i,2]
 			
 			uhati = uhat[(starti..endi),.] 
-			
+
 			Ti= rows(uhati)
+	
 			
-			
-			if (whitening == 1) {
-				uhatiy =uhati[1..rows(uhati)-1,.]
-				uhatix =uhati[2..rows(uhati),.]
+			if (whitening == 1 ) {
+				uhatix =uhati[1..rows(uhati)-1,.]
+				uhatiy =uhati[2..rows(uhati),.]
 				
 				tmp_uu = quadcross(uhatix,uhatix)
 				tmp_uu1 = invsym(tmp_uu)
 				tmp_uxy= quadcross(uhatix,uhatiy)
-				
+
 				A = tmp_uu1 * tmp_uxy
+							
+				/// Restrict parameters between -0.97|0.97 using svd; follows Andrews Monahan p. 957
+				svd(A,svdu=.,svds=.,svsvt=.)
+				tocorr = selectindex(svds:>0.97)				
+				tocorr1 = selectindex(svds:<-0.97)
+
+				if (sum(svds:>0.97):>0) {
+					svds[tocorr] = J(rows(tocorr),1,0.97)
+				}
+				if (sum(svds:<-0.97):>0) {
+					svds[tocorr1] = J(rows(tocorr),1, -0.97)
+				}	
 				
+				A = svdu * diag(svds) * svsvt'
+					
 				uhati = uhatiy - uhatix*A
 
 				Ti = rows(uhati)
+				"whitening done"
+			}
+
+			if (bandwith_init == -1 ) {
 				
-			}
-			
-			
-			Gammaj = 1/Ti * ((uhati[1..Ti,.]') * (uhati[1..Ti,.]))
-			Vi =  (Gammaj + Gammaj')
-
-			if (bandwith == 0 ) {
-				bandwith = floor( 4 * (Ti:/100)^(2/9))		
-			}
-			
-			
-			j=1
-			while (j<=bandwith) {	
-				Gammaj = 1/Ti * ((uhati[j+1..Ti,.]') * (uhati[1..Ti-j,.]))
-
-				/// use bartlett kernel 
-				if (kernel == "bartlett") {
-					kxi = 1-j/bandwith
+				if (kernel == "truncated") {	
+					/// Newey West 1994, p. 641
+					bandwith = floor( 4 * (Ti:/100)^(1/5))		
+					bandwithm = bandwith
 				}
+				else {
+					/// q and kq; seee Andrews 1991, p. 830					
+					if (kernel == "qs") {
+					
+						q = 2							
+						jj = 1
+						uhatup  = 0
+						uhatlow = 0
+						
+						while (jj <= cols(uhati)) {
+							xx = uhati[(1..Ti-1),jj]
+							yy = uhati[(2..Ti),jj]
+							uhatb = invsym(quadcross(xx,xx))* quadcross(xx,yy) 
+							///uhatb checked with gauss
+							uhatii = yy - xx * uhatb
+							uhatsig2 = (uhatii'uhatii)/(Ti-1)
+							
+							/// Eq. 3.6 in AM 1992
+							uhatup = uhatup + (2*uhatb*uhatsig2 / ( 1- uhatb)^4)^2 
+							uhatlow = uhatlow + (uhatsig2 / (1-uhatb)^2)^2							
+														
+							jj++
+						}
+						
+						/// bandwith
+						bandwith = 1.3221 * ((uhatup / uhatlow)^2 * Ti)^(1/(2*q+1))
+						bandwithm = Ti - 1
+						"QS dne"
+						
+					}
+					else if (kernel == "bartlett"){
+						
+						q = 1
+						kq = 1.1447
+						jj = 1
+						/// follow ivreg / NW p. 641
+						mstar = trunc(4 *(Ti/100)^(2/9))						
+						
+						bartsig0 = uhati'uhati / Ti
+						bartsig1 = J(cols(uhati),cols(uhati),0)
+						
+						while (jj<=mstar) {
+							sigtmp = uhati[(1..Ti-jj),.]'uhati[(jj+1..Ti),.]/ Ti
+							bartsig0 = bartsig0 + 2 * sigtmp
+												
+							bartsig1 = bartsig1 + 2 * sigtmp * jj:^q
+							jj++
+						}
+						/// choose minimal bandwidth out of bartsigmas and mstar
+						bandwith = min(((min(floor(1.1447 * (bartsig1:/bartsig0 * Ti) :^(1/(2*q+1))))),mstar))
+						
+						if (bandwith==.) {
+							bandwith = 0
+						}
+						
+						bandwithm = (bandwith > (Ti-1)) * (Ti - 1 - bandwith) + bandwith
+						
+						if (bandwithm==.) {
+							bandwithm = 0
+						} 
+						
+						/// Newey West 1994, Table II, Part C
+						///if (whitening == 1) {
+						///	bandwith = floor( 4 * (Ti:/100)^(2/9))	
+						///}
+						///else {
+						///	bandwith = floor( 3 * (Ti:/100)^(2/9))	
+						///}
+					}
+					(bandwithm,bandwith)
+				}
+				bandwith_sum = bandwith_sum + bandwithm
+			}
+			else{
+				bandwithm = bandwith
+			}
+				
+			/// calculation of autocorrelations
+			Vi = 1/Ti * ((uhati[1..Ti,.])' * (uhati[1..Ti,.]))
+
+			j=1			
+			while (j <=bandwithm) {
+				Gammaj = 1/Ti * ((uhati[j+1..Ti,.])' * (uhati[1..Ti-j,.]))
+				bwcorr = 1
+				
+				/// bartlett kernel 
+				if (kernel == "bartlett") {
+					kxi = 1-j/(bandwith+1)
+					if (kxi < 0) {
+						kxi = 0
+					}
+					/// see Newey West 1994, bartlett has difference between omegas
+					bwcorr = -1
+				}
+				/// QS Kernel
 				else if (kernel == "qs") {
 					kxi = j/bandwith
 					kxi = 25 / (12 * pi()^2 * kxi^2) * (sin(6*pi()*kxi / 5) / (6*pi() * kxi/5)  - cos(6 * pi() * kxi/5))
+					
 				}
-				else if (kernel == "truncated") {
-					kxi = (j/bandwith <= 1)
+				/// Truncated Kernel
+				else if (kernel == "truncated") {					
+					///always 1
+					kxi = 1					
 				}
-
-				Vi = Vi + kxi * (Gammaj + Gammaj')
-				j++
+				
+				Vi = Vi + kxi * (Gammaj + bwcorr * Gammaj')
+				
+				j++				
 			}	
-			
+						
+			/// adjust Vi if whitend
 			if (whitening == 1) {
+				/// eq 3.7 in Andrews and Mohnahan 1992
 				Vi = invsym(I(K)-A)* Vi * invsym(I(K)-A)'
-			}	
-
-			V[start2i..end2i,.] = invsym(Vi)
-
-			i++
-		}
-
-		
-		
-		///estimate beta
-		beta_low = J(K,K,0)
-		beta_up = J(K,1,0)
-		
-		i = 1
-		while (i<=N_g) {
-			starti = index[i,1]
-			endi = index[i,2]
-		
-			Yi = Y[(starti..endi),.]
+			}
+			
 			Xi = X[(starti..endi),.]
-		
-			start2i = index2[i,1]
-			end2i = index2[i,2]
-			
-			Vi1 = V[start2i..end2i,.]
-			
-			Ti = rows(Xi)
-			
-			Qi = quadcross(Xi,Xi) / Ti
+			Yi = Y[(starti..endi),.]
+			Qi = quadcross(Xi,Xi) / rows(Xi)
 			QiY = quadcross(Xi,Yi)
-			beta_low = beta_low + Ti * Qi * Vi1 * Qi
-			beta_up = beta_up + Qi * Vi1 * QiY
+			
+			Vi1 = invsym(Vi)
+			
+			QVQi = Qi * Vi1 * Qi
+			QVYi = Qi * Vi1 * QiY
+			
+			/// QVQ/QVY required for S_HAC			
+			QVQ[start2i..end2i,.] = QVQi
+					
+			beta_low = beta_low + rows(Xi) * QVQi
+			beta_up = beta_up + QVYi			
+			"i done"
+			i
 			i++
 		}
-		
+				
 		beta = invsym(beta_low) * beta_up
-		
-		/// estimate S_HAC
-		
+
+		/// S_HAC		
 		S_HAC = 0
 		Tavg = 0
 		i = 1
+
 		while (i<=N_g) {
 			starti = index[i,1]
 			endi = index[i,2]
@@ -507,21 +626,19 @@ mata:
 			Xi = X[(starti..endi),.]
 		
 			start2i = index2[i,1]
-			end2i = index2[i,2]
-			
-			Vi1 = V[start2i..end2i,.]
-			
+			end2i = index2[i,2]			
+
 			Ti = rows(Xi)
 			
 			tmp_xx = quadcross(Xi,Xi)
-			Qi = tmp_xx / Ti
+
 			tmp_xx1 = invsym(tmp_xx)
 			tmp_xy = quadcross(Xi,Yi)
-			
 			betai = tmp_xx1 * tmp_xy
-
-			S_HAC = S_HAC+ Ti * (betai - beta)' * Qi * Vi1 * Qi * (betai - beta)
+	
+			QVQi = QVQ[start2i..end2i,.]
 			
+			S_HAC = S_HAC+ Ti* (betai - beta)' * (QVQi) * (betai - beta)
 			Tavg = Tavg + Ti
 			i++
 		}
@@ -533,8 +650,8 @@ mata:
 		var = 2 * K * (Tavg-K-Kpartial-1)/ (Tavg-Kpartial+1)
 		
 		delta_adj = sqrt(N_g)*(((S_HAC/N_g)-K)/sqrt(var))
-		
-		return(delta_hac\delta_adj\bandwith)
+
+		return(delta_hac\delta_adj\(bandwith_sum/N_g))
 	}
 end
 

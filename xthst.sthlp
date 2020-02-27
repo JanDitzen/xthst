@@ -1,6 +1,6 @@
 {smcl}
 {hline}
-help {hi:xthst}{right: v. 1.1 - 17. January 2020}
+help {hi:xthst}{right: v. 1.2 - 27. February 2020}
 {hline}
 {title:Title}
 
@@ -69,7 +69,8 @@ For the latter, an additional assumption is required: (N,T) jointly converge to
 infinity, meaning that N/T needs to be constant.
 The test allows for non-normally distributed errors, such as serial correlated errors.
 {cmd: xthst} uses the HAC consistent test statistic derived by Blomquist and Westerlund (2013).
-In addition, simulation results show that by adding cross sectional averages to the model,
+In addition, Bersvendsen and Ditzen (2020) show using simulation 
+results that by adding cross sectional averages to the model,
 the test works for situations with cross-section dependence in the error term and variables. {p_end}
 
 {marker econmetricmodel}{title:Econometric Model}
@@ -266,6 +267,11 @@ can be employed using the option {cmd:ar}:{p_end}
 An Improved Heteroskedasticity and Autocorrelation Consistent Covariance Matrix Estimator.
 Econometrica 60(4), p. 953 - 966.{p_end}
 
+{p 4 8}Bersvendsen, T. and J. Ditzen. 2020.
+xthst: Testing for slope homogeneity in Stata. 
+CEERP Working Paper Series No. 011.
+{browse "https://ceerp.hw.ac.uk/RePEc/hwc/wpaper/011.pdf":Download}.{p_end}
+
 {p 4 8} Blomquist, J. and J. Westerlund. 2013. Testing slope homogeneity in large panels with serial correlation.
 Economics Letters 121, pp 374 - 378.{p_end}
 
@@ -277,10 +283,14 @@ Journal of Econometrics 142, pp 50 - 93.{p_end}
 
 
 {marker vhist}{title:Version History}
-{p 4 8}This version: 1.1 - 17. January 2020{p_end}
+{p 4 8}This version: 1.2 - 27 February 2020{p_end}
+{p 8 10} - Corrected output when cross-sectional averages used.{p_end}
+{p 8 10} - Corrections and additions to help file.{p_end}
+{p 4 8}Version 1.1 - 17. January 2020{p_end}
 {p 8 10} - Improved Speed.{p_end}
 {p 8 10} - Bug fix in small sample adjustment for S and S_HAC.{p_end}
 {p 8 10} - Bug fix if hac used, first auto correlation was miscalculated.{p_end}
+
 
 {marker about}{title:About}
 

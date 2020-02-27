@@ -1,5 +1,5 @@
 *! xthst
-*! Version 1.2 - 28.01.2020
+*! Version 1.2 - 27.02.2020
 *! Tore Bersvendsen (University of Agder) tore.bersvendsen@uia.no
 *! Jan Ditzen (Heriot-Watt University) j.ditzen@hw.ac.uk www.jan.ditzen.net 
 

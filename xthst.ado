@@ -1,5 +1,5 @@
 *! xthst
-*! Version 1.1 - 17.01.2020
+*! Version 1.2 - 28.01.2020
 *! Tore Bersvendsen (University of Agder) tore.bersvendsen@uia.no
 *! Jan Ditzen (Heriot-Watt University) j.ditzen@hw.ac.uk www.jan.ditzen.net 
 
@@ -10,6 +10,7 @@ Version History
 				 - Qi Vi Qi needs to be cacluated within the i-loops. 
 	- 17.01.2020 - bug fix in deltahac; wrong initial gamma and divided by incorrect number of periods
 				 - bug fix in deltacalc; divided by incorrect number of periods
+	- 28.01.2020 - corrected output with tempvars and cross-sectional variables
 */
 
 capture program drop xthst
@@ -422,7 +423,7 @@ mata:
 		
 		/// sum of bandwith, used for output
 		bandwith_sum = 0
-		
+		bandwith
 		i=1
 		while (i<=N_g) {
 			"start with i"
@@ -476,8 +477,7 @@ mata:
 				}
 				else {
 					/// q and kq; seee Andrews 1991, p. 830					
-					if (kernel == "qs") {
-					
+					if (kernel == "qs") {					
 						q = 2							
 						jj = 1
 						uhatup  = 0
@@ -501,8 +501,7 @@ mata:
 						/// bandwith
 						bandwith = 1.3221 * ((uhatup / uhatlow)^2 * Ti)^(1/(2*q+1))
 						bandwithm = Ti - 1
-						"QS dne"
-						
+						"QS dne"						
 					}
 					else if (kernel == "bartlett"){
 						
@@ -512,18 +511,19 @@ mata:
 						/// follow ivreg / NW p. 641
 						mstar = trunc(4 *(Ti/100)^(2/9))						
 						
-						bartsig0 = uhati'uhati / Ti
+						bartsig0 = sqrt(uhati'uhati / Ti)
 						bartsig1 = J(cols(uhati),cols(uhati),0)
 						
 						while (jj<=mstar) {
-							sigtmp = uhati[(1..Ti-jj),.]'uhati[(jj+1..Ti),.]/ Ti
+							/// added Ti - jj
+							sigtmp = sqrt(uhati[(1..Ti-jj),.]'uhati[(jj+1..Ti),.]/ rows(uhati[(1..Ti-jj),.]))
 							bartsig0 = bartsig0 + 2 * sigtmp
-												
-							bartsig1 = bartsig1 + 2 * sigtmp * jj:^q
+							bartsig1 = bartsig1 + 2 * sigtmp * jj					
+							///bartsig1 = bartsig1 + 2 * sigtmp * jj:^q
 							jj++
 						}
-						/// choose minimal bandwidth out of bartsigmas and mstar
-						bandwith = min(((min(floor(1.1447 * (bartsig1:/bartsig0 * Ti) :^(1/(2*q+1))))),mstar))
+						/// choose minimal bandwidth out of bartsigmas and mstar; changed to ^(2); put the ^2 only around bartsig because T^(1/3)
+						bandwith = min(((min(floor(1.1447 * ((bartsig1:/bartsig0):^2 * Ti) :^(1/(2*q+1))))),mstar))
 						
 						if (bandwith==.) {
 							bandwith = 0
@@ -548,7 +548,9 @@ mata:
 				bandwith_sum = bandwith_sum + bandwithm
 			}
 			else{
+				bandwith = bandwith_init
 				bandwithm = bandwith
+				bandwith_sum = bandwith * N_g
 			}
 				
 			/// calculation of autocorrelations
@@ -659,8 +661,11 @@ end
 capture program drop xtdcce2_csa
 program define xtdcce2_csa, rclass
         syntax varlist(ts) , idvar(varlist) tvar(varlist) cr_lags(numlist) touse(varlist) csa(string) 
-                tsrevar `varlist'
+               tsunab olist: `varlist'
+			   
+			   tsrevar `varlist'
                 local varlist `r(varlist)'
+				
                 foreach var in `varlist' {
                                 local ii `=strtoname("`var'")'
                                 tempvar `ii'
@@ -683,7 +688,7 @@ program define xtdcce2_csa, rclass
                                 sort `idvar' `tvar'
                                 tsrevar L(0/`lagi').`var'
                                 
-                                local cross_structure "`cross_structure' `=word("`varlist'",`i')'(`lagi')"
+                                local cross_structure "`cross_structure' `=word("`olist'",`i')'(`lagi')"
                                 local clistfull `clistfull' `r(varlist)'
                                 local i = `i' + 1
                         }

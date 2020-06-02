@@ -1,6 +1,6 @@
 {smcl}
 {hline}
-help {hi:xthst}{right: v. 1.2 - 27. February 2020}
+help {hi:xthst}{right: v. 1.3 - 13. May 2020}
 {hline}
 {title:Title}
 
@@ -18,6 +18,7 @@ help {hi:xthst}{right: v. 1.2 - 27. February 2020}
 {cmdab:cr:osssectional(}{help varlist:varlist_cr}
 {cmd: [,cr_lags(}{help numlist}{cmd:)])}
 {cmdab:noout:put}
+{cmdab:compareh:ac}
 ]{p_end}
 
 {p 4 4}{it:depvar} and {it:indepvars} may contain time-series operators; see {help tsvarlist}.{break}
@@ -72,6 +73,12 @@ The test allows for non-normally distributed errors, such as serial correlated e
 In addition, Bersvendsen and Ditzen (2020) show using simulation 
 results that by adding cross sectional averages to the model,
 the test works for situations with cross-section dependence in the error term and variables. {p_end}
+
+{p 4 4}{cmd:xthst} can check for cross-sectional dependence using {help xtcd2}.
+In addition it can show results of the standard delta test and the hac robust version
+to help finding the optiomal set of options. 
+For differences between the options and their impact on results, 
+see the simulations in Bersvendsen and Ditzen (2020).{p_end}
 
 {marker econmetricmodel}{title:Econometric Model}
 
@@ -181,6 +188,19 @@ then {cmd:cr_lags(0 2)}  {p_end}
 
 {p 4 4}{cmdab:noout:put} omits output.  {p_end}
 
+{p 4 4}{cmdab:compareh:ac} compares the standard delta test to the HAC robust version.
+First the standard delta test is run, then the HAC robust version. 
+Results for both tests are displayed.
+If the tests disagree a message is posted.
+In addition the base of all variables are tested for cross-sectional dependence
+using {help xtcd2} (requires {stata findit xtcd2}). 
+If cross-sectional dependence is found, a message is posted.
+The options {cmd:crosssectional()}, {cmd:partial()} and {cmd:noconstant} apply to both test.
+All HAC related options are only used for the HAC robust run.{break}
+This option is only for testing purposes and should {ul:not} replace
+further testing.
+{p_end}
+
 {marker saved_vales}{title:Saved Values}
 
 {cmd:xthst} stores the following in {cmd:r()}:
@@ -243,6 +263,13 @@ say, a bandwidth of 6 by using the options {cmd:kernel()} and {cmd:bw()}:{p_end}
 
 {p 8}{stata xthst d.log_rgdp L.d.log_rgdp log_hc log_ck log_ngd, hac kernel(qs)}.{p_end}
 
+{p 4 4}To guide the researcher it is possible to directly compare the test results
+from the standard delta test and the hac robust version. 
+The option {comparehac} performs both tests and - if installed - checks
+with {help xtcd2} for cross-sectional dependence.{p_end}
+
+{p 8}{stata xthst d.log_rgdp L.d.log_rgdp log_hc log_ck log_ngd, comparehac}.{p_end}
+
 {p 4 4}In large panels cross-sectional dependence is likely, see 
 {help xtdcce2}, {help xtcd2} and {help xtcse2}. 
 {cmd:xthst} can remove cross-sectional dependence by adding cross-sectional averages.
@@ -283,7 +310,9 @@ Journal of Econometrics 142, pp 50 - 93.{p_end}
 
 
 {marker vhist}{title:Version History}
-{p 4 8}This version: 1.2 - 27 February 2020{p_end}
+{p 4 8}This version: 1.3 - 02 June 2020{p_end}
+{p 8 10} - Added {cmd:comparehac} option.{p_end}
+{p 4 8}Version 1.2 - 27.February 2020{p_end}
 {p 8 10} - Corrected output when cross-sectional averages used.{p_end}
 {p 8 10} - Corrections and additions to help file.{p_end}
 {p 4 8}Version 1.1 - 17. January 2020{p_end}
@@ -305,5 +334,6 @@ Journal of Econometrics 142, pp 50 - 93.{p_end}
 for providing many helpful comments and discussions. 
 Johan Blomquist and Joakim Westerlund kindly provided their Gauss Code for
 cross-checking.
+An anonymous referee suggested the option {cmd:comparehac}.
 All remaining errors are our own.{p_end}
 

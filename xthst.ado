@@ -1,5 +1,5 @@
 *! xthst
-*! Version 1.2 - 27.02.2020
+*! Version 1.3 - 13.05.2020
 *! Tore Bersvendsen (University of Agder) tore.bersvendsen@uia.no
 *! Jan Ditzen (Heriot-Watt University) j.ditzen@hw.ac.uk www.jan.ditzen.net 
 
@@ -11,16 +11,22 @@ Version History
 	- 17.01.2020 - bug fix in deltahac; wrong initial gamma and divided by incorrect number of periods
 				 - bug fix in deltacalc; divided by incorrect number of periods
 	- 28.01.2020 - corrected output with tempvars and cross-sectional variables
+	- 13.05.2020 - added comparehac option and xthst_compare program
 */
 
 capture program drop xthst
 program define xthst, rclass sortpreserve
-	syntax varlist(min=2 ts) [if] , [partial(varlist ts) NOCONStant ar hac bw(integer -999) WHITEning kernel(string) CRosssectional(string) NOOUTput ]
+	syntax varlist(min=2 ts) [if] , [partial(varlist ts) NOCONStant ar hac bw(integer -999) WHITEning kernel(string) CRosssectional(string) NOOUTput COMPAREHac]
 	
 	version 14
 	
 	qui{
-
+		
+		if "`comparehac'" != "" {
+			noi xthst_compare `varlist' `if' , `noconstant' `ar' partial(`partial') `ar' bw(`bw') `whitening' kernel(`kernel') cross(`crosssectional')
+			exit
+		}
+		
 		if "`whitening'" != "" & "`hac'" == "" {
 			local hac hac
 		}
@@ -34,7 +40,7 @@ program define xthst, rclass sortpreserve
 		}
 		
 		if "`hac'" == "hac" & "`ar'" == "ar" {
-			noi disp as error "Option hac and ar" ,_c
+			noi disp as error "Option hac and ar cannot be combined." ,_c
 			error 184
 			exit
 		}
@@ -42,7 +48,12 @@ program define xthst, rclass sortpreserve
 		if "`kernel'" == "" {
 			local kernel "bartlett"
 		}
-		
+		else {
+			if "`kernel'" != "qs" & "`kernel'" != "bartlett" & "`kernel'" != "truncated" {
+				noi disp as smcl "`kernel' is an invalid kernel. Only {it:qs}, {it:truncated} or {it:bartlett} as kernels are allowed."
+				exit
+			} 
+		}
 		tempvar touse	
 		marksample touse
 		
@@ -103,6 +114,14 @@ program define xthst, rclass sortpreserve
 	scalar `delta_adj' = `delta'[2,1]
 	scalar `delta_st' = `delta'[1,1]	
 	
+	local partial = subinstr("`partial'","`const'","constant",.)
+	if wordcount("`cr_lags'") > 1 {
+		local crosssectional_output "`cross_structure'"
+	}
+	else {
+		local crosssectional_output "`crosssectional'"
+	}
+	
 	*** Disagreement between PY and BW. In PY delta is two sided N(0,1) [ see p. 64, above 5.1]; in BW it is one-sided N(0,1); see footnote Tab 1; keep two sided
 	if "`hac'" == "" {
 		local twosided = 2
@@ -112,7 +131,7 @@ program define xthst, rclass sortpreserve
 	}	
 	
 	if "`nooutput'" == "" {
-		noi disp as text "Test for slope homogeneity"
+		noi disp as text "Testing for slope heterogeneity"
 		if "`hac'" == "" {
 			noi disp as text "(Pesaran, Yamagata. 2008. Journal of Econometrics)"
 			
@@ -135,16 +154,11 @@ program define xthst, rclass sortpreserve
 			noi disp as txt "with average bandwith " `bw'
 		}
 		if "`partial'" != "" {
-			local partial = subinstr("`partial'","`const'","constant",.)
+			
 			noi disp "Variables partialled out: `partial'"
 		}
 		if "`crosssectional'" != "" {
-			if wordcount("`cr_lags'") > 1 {
-				local crosssectional_output "`cross_structure'"
-			}
-			else {
-				local crosssectional_output "`crosssectional'"
-			}
+			
 			display  as text "Cross Sectional Averaged Variables: `crosssectional_output'"
 		}
 	}
@@ -703,3 +717,155 @@ program define xtdcce2_csa, rclass
                 return local cross_structure "`cross_structure'"
 end
 
+
+/* compare program. calls xthst with preferred ts options and checks for CSD */
+capture program drop xthst_compare
+program define xthst_compare
+	syntax varlist(min=2 ts) [if] , [ partial(varlist ts) NOCONStant ar hac bw(integer -999) WHITEning kernel(string) CRosssectional(string)   ]
+	
+	tempvar touse	
+	marksample touse
+	qui{
+		*** process options
+		if "`partial'" != "" {
+			local partial "partial(`partial')"
+		}
+		if "`bw'" != "" {
+			if "`bw'" == "-1" | "`bw'" == "-999" {
+				local bw
+			}
+			local bw "bw(`bw')"
+		}
+		if "`kernel'" != "" {
+			local kernel "kernel(`kernel')"
+		}
+		else {
+			local kernel "kernel(qs)"
+		}
+		if "`hac'" == "" {
+			local hac hac
+		}
+		local cross_cmd "`crosssectional'"
+		if "`crosssectional'" != "" {
+			local crosssectional "crosssectional(`crosssectional')"
+		}
+		
+		*** check if xtcd2 is installed for csd check
+		local xtcd2 = 1
+		cap which xtcd2
+		if _rc != 0 {
+			noi disp "xtcd2 not installed. No tests for cross-sectional dependence will be performed."
+			noi display in smcl "Please install from {stata findit xtcd2}."
+			noi disp ""
+			local xtcd2 = 0
+		}
+		
+		*** check for cross-sectional dependence in variables only
+		if `xtcd2' == 1 {
+			foreach var in `varlist' {
+				qui xtcd2 `var' `if' , noest
+				if `r(p)' <  `=1-`c(level)'/100' {
+					local CSDList "`CSDList' `var'"
+				}
+			}
+		}
+		*** Perform Tests
+		*** standard 
+		qui xthst `varlist' `if' , `noconstant'  `partial' `crosssectional' nooutput
+		tempname st_delta st_deltap 
+		local st_partial "`r(partial)'"
+		local st_crosssectional "`r(crosssectional)'"
+		matrix `st_delta' = r(delta)
+		matrix `st_deltap' = r(delta_p)		
+		
+		*** HAC+QS+PRE
+		qui xthst `varlist' `if' , `noconstant' `ar' `partial' `crosssectional'  `hac' `kernel' `whitening' nooutput
+		tempname hac_delta hac_deltap
+		local hac_partial "` r(partial)'"
+		local hac_crosssectional "`r(crosssectional)'"
+		local hac_bw = r(bw)
+		local hac_kernel "`r(kernel)'"
+		matrix `hac_delta' = r(delta)
+		matrix `hac_deltap' = r(delta_p)
+	
+	}
+	*** Output
+	** clear return
+	return clear
+		
+	tempname delta_st delta_adj
+		
+	local twosided = 2
+		
+	noi disp as text "Testing for slope heterogeneity"
+	noi disp "H0: slope coefficients are homogenous"
+
+		
+	scalar `delta_st' = `st_delta'[1,1]
+	scalar `delta_adj' = `st_delta'[2,1]
+	
+	di as text "{hline 37}"
+	noi disp as result _col(10) "Delta" _col(25) "p-value"
+	noi disp as result  _col(7) %9.3f `delta_st' _col(23) %9.3f `twosided'*(1-normal(abs(`delta_st')))
+	noi disp as result  _col(2) "adj." _col(7) %9.3f `delta_adj'  _col(23) %9.3f `twosided'*(1-normal(abs(`delta_adj')))
+	di as text "{hline 37}"
+		
+	scalar `delta_st' = `hac_delta'[1,1]
+	scalar `delta_adj' = `hac_delta'[2,1]
+	
+	*di as text "{hline 37}"
+	noi disp as result _col(10) "Delta (HAC)" _col(25) "p-value"
+	noi disp as result  _col(7) %9.3f `delta_st' _col(23) %9.3f `twosided'*(1-normal(abs(`delta_st')))
+	noi disp as result  _col(2) "adj." _col(7) %9.3f `delta_adj'  _col(23) %9.3f `twosided'*(1-normal(abs(`delta_adj')))
+	di as text "{hline 37}"
+	
+	tempname check1 check2
+	scalar `check1' = `st_deltap'[1,1]
+	scalar `check2' = `hac_deltap'[1,1]
+			
+	if (`check1' > `=1-`c(level)'/100' & `check2' <  `=1-`c(level)'/100') |  (`check1' <  `=1-`c(level)'/100' & `check2' >  `=1-`c(level)'/100') {
+		noi disp as text "Tests disagree. Autocorrelation might occur."
+		noi disp in smcl "See {help xthst:helpfile} for further info."
+	}
+	
+	*noi disp ""
+	*noi disp as text "Delta Test (standard) based on"
+	*noi disp as text "Pesaran, Yamagata. 2008. Journal of Econometrics"
+	
+	*noi disp as text "Delta Test (HAC robust) based on"
+	*noi disp as text "Blomquist, Westerlund. 2013. Economic Letters"
+	
+	noi disp ""
+	if "`hac_kernel'" == "qs" { 
+			local hac_kernel "quadratic spectral (QS)"
+	}
+	noi disp as txt "HAC Settings:"
+	noi disp as txt _col(8) "Kernel: `hac_kernel' "
+	noi disp as txt _col(8) "with average bandwith " `hac_bw'
+	
+	local checki "`hac_partial' `st_partial'"
+	local partial: list uniq checki
+	
+	local checki "`hac_crosssectional' `st_crosssectional'"
+	local crosssectional: list uniq checki
+	
+	if "`partial'`crosssectional'" != "" {
+		noi disp ""
+	}
+	
+	if "`partial'" != "" {
+		noi disp as txt "Variables partialled out: `partial'"
+	}
+	if "`crosssectional'" != "" {
+		noi disp as txt "Cross Sectional Averaged Variables: `crosssectional'"
+	}
+	
+	if "`CSDList'" != ""  {
+		noi disp ""
+		noi disp as txt  "Cross Sectional dependence in base variables detected:"
+		noi disp as txt "   `CSDList'"
+		noi disp in smcl "See helpfile for {help xthst:xthst} and {help xtcd2:xtcd2} for further info."
+	}
+	
+
+end

@@ -1,4 +1,7 @@
 # xthst
+
+![version](https://img.shields.io/github/v/release/janditzen/xthst) ![release](https://img.shields.io/github/release-date/janditzen/xthst)
+
 Testing for slope homogeneity
 
 Article: 
